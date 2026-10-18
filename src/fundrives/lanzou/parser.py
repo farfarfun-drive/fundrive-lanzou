@@ -55,10 +55,7 @@ def parse_sign(html: str) -> str:
     """
     # sign 放在变量后面前后各有一个干扰项
     sign = re.findall(r"'sign':(.+?),", html)
-    if len(sign) > 1:
-        sign = sign[1]
-    else:
-        sign = sign[0]
+    sign = sign[1] if len(sign) > 1 else sign[0]
     if len(sign) < 20:  # 此时 sign 保存在变量里面, 变量名是 sign 匹配的字符
         sign = (
             re.findall(r"var sasign\s*=\s*'(.{10,}?)';", html)

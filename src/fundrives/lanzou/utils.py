@@ -64,8 +64,7 @@ def remove_notes(html: str) -> str:
     # 去掉 html 里面的 // 和 <!-- --> 注释，防止干扰正则匹配提取数据
     # 蓝奏云的前端程序员喜欢改完代码就把原来的代码注释掉,就直接推到生产环境了 =_=
     html = re.sub(r"<!--.+?-->|\s+//\s*.+", "", html)  # html 注释
-    html = re.sub(r"(.+?[,;])\s*//.+", r"\1", html)  # js 注释
-    return html
+    return re.sub(r"(.+?[,;])\s*//.+", r"\1", html)  # js 注释
 
 
 def name_format(name: str) -> str:
@@ -119,15 +118,14 @@ def time_format(time_str: str) -> str:
     """输出格式化时间 %Y-%m-%d"""
     if "秒前" in time_str or "分钟前" in time_str or "小时前" in time_str:
         return datetime.today().strftime("%Y-%m-%d")
-    elif "昨天" in time_str:
+    if "昨天" in time_str:
         return (datetime.today() - timedelta(days=1)).strftime("%Y-%m-%d")
-    elif "前天" in time_str:
+    if "前天" in time_str:
         return (datetime.today() - timedelta(days=2)).strftime("%Y-%m-%d")
-    elif "天前" in time_str:
+    if "天前" in time_str:
         days = time_str.replace(" 天前", "")
         return (datetime.today() - timedelta(days=int(days))).strftime("%Y-%m-%d")
-    else:
-        return time_str
+    return time_str
 
 
 reg_number = re.compile(r"\d+")
@@ -255,18 +253,16 @@ def is_file_url(share_url: str) -> bool:
     user_pat = r"https?://(\w[-\w]*\.)?(lanzou[a-z]|lan\w+)\.com/i[a-zA-Z0-9]{5,}(\?webpage=[a-zA-Z0-9]+?)?/?"  # 普通用户 URL 规则
     if not re.fullmatch(base_pat, share_url):
         return False
-    elif re.fullmatch(user_pat, share_url):
+    if re.fullmatch(user_pat, share_url):
         return True
-    else:  # VIP 用户的 URL 很随意
-        try:
-            html = requests.get(share_url, headers=headers, verify=False).text
-        except requests.RequestException as e:
-            logger.error(f"请求分享链接失败: reason={type(e).__name__}: {e}")
-            return False
-        html = remove_notes(html)
-        return (
-            True if re.search(r'class="fileinfo"|id="file"|文件描述', html) else False
-        )
+    # VIP 用户的 URL 很随意
+    try:
+        html = requests.get(share_url, headers=headers, verify=False).text
+    except requests.RequestException as e:
+        logger.error(f"请求分享链接失败: reason={type(e).__name__}: {e}")
+        return False
+    html = remove_notes(html)
+    return bool(re.search(r'class="fileinfo"|id="file"|文件描述', html))
 
 
 def is_folder_url(share_url: str) -> bool:
@@ -275,16 +271,16 @@ def is_folder_url(share_url: str) -> bool:
     user_pat = r"https?://(\w[-\w]*\.)?lanzou[a-z].com/(/s/)?b[a-zA-Z0-9]{7,}/?"
     if not re.fullmatch(base_pat, share_url):
         return False
-    elif re.fullmatch(user_pat, share_url):
+    if re.fullmatch(user_pat, share_url):
         return True
-    else:  # VIP 用户的 URL 很随意
-        try:
-            html = requests.get(share_url, headers=headers).text
-        except requests.RequestException as e:
-            logger.error(f"请求分享链接失败: reason={type(e).__name__}: {e}")
-            return False
-        html = remove_notes(html)
-        return True if re.search(r'id="infos"', html) else False
+    # VIP 用户的 URL 很随意
+    try:
+        html = requests.get(share_url, headers=headers).text
+    except requests.RequestException as e:
+        logger.error(f"请求分享链接失败: reason={type(e).__name__}: {e}")
+        return False
+    html = remove_notes(html)
+    return bool(re.search(r'id="infos"', html))
 
 
 def un_serialize(data: bytes) -> dict | None:
@@ -447,8 +443,7 @@ def auto_rename(file_path) -> str:
 def calc_acw_sc__v2(html_text: str) -> str:
     arg1 = re.search(r"arg1='([0-9A-Z]+)'", html_text)
     arg1 = arg1.group(1) if arg1 else ""
-    acw_sc__v2 = hex_xor(unsbox(arg1), "3000176000856006061501533003690027800375")
-    return acw_sc__v2
+    return hex_xor(unsbox(arg1), "3000176000856006061501533003690027800375")
 
 
 # 参考自 https://zhuanlan.zhihu.com/p/228507547
@@ -502,8 +497,7 @@ def unsbox(str_arg):
             if v1[idx2] == idx + 1:
                 v2[idx2] = v3
 
-    res = "".join(v2)
-    return res
+    return "".join(v2)
 
 
 def hex_xor(str_arg, args):

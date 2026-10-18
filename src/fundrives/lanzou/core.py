@@ -153,9 +153,9 @@ class LanZouCloud:
                 kwargs.setdefault("timeout", self._timeout)
                 kwargs.setdefault("headers", self._headers)
                 return self._session.get(possible_url, verify=False, **kwargs)
-            except requests.Timeout:
+            except requests.Timeout as err:
                 logger.warning("Encountered timeout error while requesting network!")
-                raise TimeoutError
+                raise TimeoutError from err
             except (ConnectionError, requests.RequestException):
                 logger.debug(f"Get {possible_url} failed, try another domain")
 
@@ -167,9 +167,9 @@ class LanZouCloud:
                 kwargs.setdefault("timeout", self._timeout)
                 kwargs.setdefault("headers", self._headers)
                 return self._session.head(possible_url, verify=False, **kwargs)
-            except requests.Timeout:
+            except requests.Timeout as err:
                 logger.warning("Encountered timeout error while requesting network!")
-                raise TimeoutError
+                raise TimeoutError from err
             except (ConnectionError, requests.RequestException):
                 logger.debug(f"Get {possible_url} failed, try another domain")
 
@@ -181,9 +181,9 @@ class LanZouCloud:
                 kwargs.setdefault("timeout", self._timeout)
                 kwargs.setdefault("headers", self._headers)
                 return self._session.post(possible_url, data, verify=False, **kwargs)
-            except requests.Timeout:
+            except requests.Timeout as err:
                 logger.warning("Encountered timeout error while requesting network!")
-                raise TimeoutError
+                raise TimeoutError from err
             except (ConnectionError, requests.RequestException):
                 # 不记录 data：登录等请求的 body 里带账号密码
                 logger.debug(f"Post to {possible_url} failed, try another domain")
@@ -370,34 +370,34 @@ class LanZouCloud:
                     file_name_list.append(name)
                 file_list.append(RecFile(name, int(fid), ftype, size="", time=time))
             return file_list
-        else:  # 列出回收站中文件夹内的文件,信息只有部分文件名和文件大小
-            para = {
-                "item": "recycle",
-                "action": "folder_restore",
-                "folder_id": folder_id,
-            }
-            html = self._get(self._mydisk_url, params=para)
-            if not html or "此文件夹没有包含文件" in html.text:
-                return FileList()
-            html = remove_notes(html.text)
-            files = re.findall(
-                r'com/(\d+?)".+?filetype/(\w+)\.gif.+?/>&nbsp;(.+?)(?:\.{3})?</a> <font color="#CCCCCC">\((.+?)\)</font>',
-                html,
-            )
-            file_list = FileList()
-            file_name_list = []
-            counter = 1
-            for fid, ftype, name, size in sorted(files, key=lambda x: x[2]):
-                if not name.endswith(ftype):  # 防止文件名太长丢失后缀
-                    name = name + "." + ftype
-                if name in file_name_list:
-                    counter += 1
-                    name = f"{name}({counter})"  # 防止文件名太长且前17个字符重复
-                else:
-                    counter = 1
-                    file_name_list.append(name)
-                file_list.append(RecFile(name, int(fid), ftype, size=size, time=""))
-            return file_list
+        # 列出回收站中文件夹内的文件,信息只有部分文件名和文件大小
+        para = {
+            "item": "recycle",
+            "action": "folder_restore",
+            "folder_id": folder_id,
+        }
+        html = self._get(self._mydisk_url, params=para)
+        if not html or "此文件夹没有包含文件" in html.text:
+            return FileList()
+        html = remove_notes(html.text)
+        files = re.findall(
+            r'com/(\d+?)".+?filetype/(\w+)\.gif.+?/>&nbsp;(.+?)(?:\.{3})?</a> <font color="#CCCCCC">\((.+?)\)</font>',
+            html,
+        )
+        file_list = FileList()
+        file_name_list = []
+        counter = 1
+        for fid, ftype, name, size in sorted(files, key=lambda x: x[2]):
+            if not name.endswith(ftype):  # 防止文件名太长丢失后缀
+                name = name + "." + ftype
+            if name in file_name_list:
+                counter += 1
+                name = f"{name}({counter})"  # 防止文件名太长且前17个字符重复
+            else:
+                counter = 1
+                file_name_list.append(name)
+            file_list.append(RecFile(name, int(fid), ftype, size=size, time=""))
+        return file_list
 
     def get_rec_all(self):
         """获取整理后回收站的所有信息"""
@@ -561,13 +561,11 @@ class LanZouCloud:
                     )
                     break
                 continue
-            else:
-                retry = 0
-                resp = resp.json()
+            retry = 0
+            resp = resp.json()
             if resp["info"] == 0:
                 break  # 已经拿到了全部的文件信息
-            else:
-                page += 1  # 下一页
+            page += 1  # 下一页
             # 文件信息处理
             if resp["zt"] == 9:  # login not
                 logger.debug(f"Not login resp={resp}")
@@ -581,12 +579,8 @@ class LanZouCloud:
                         size=file["size"].replace(",", ""),  # 文件大小
                         type=file["name_all"].split(".")[-1],  # 文件类型
                         downs=int(file["downs"]),  # 下载次数
-                        has_pwd=True
-                        if int(file["onof"]) == 1
-                        else False,  # 是否存在提取码
-                        has_des=True
-                        if int(file["is_des"]) == 1
-                        else False,  # 是否存在描述
+                        has_pwd=int(file["onof"]) == 1,  # 是否存在提取码
+                        has_des=int(file["is_des"]) == 1,  # 是否存在描述
                     )
                 )
         return file_list
@@ -608,7 +602,7 @@ class LanZouCloud:
                     Folder(
                         id=int(folder["fol_id"]),
                         name=folder["name"],
-                        has_pwd=True if int(folder["onof"]) == 1 else False,
+                        has_pwd=int(folder["onof"]) == 1,
                         desc=folder["folder_des"][1:-1],
                     )
                 )
@@ -629,9 +623,7 @@ class LanZouCloud:
 
     @property
     def doupload_url(self):
-        return self._doupload_url + (
-            self._session.cookies["ylogin"] if "ylogin" in self._session.cookies else ""
-        )
+        return self._doupload_url + (self._session.cookies.get("ylogin", ""))
 
     def clean_ghost_folders(self):
         """清除网盘中的幽灵文件夹"""
@@ -886,19 +878,18 @@ class LanZouCloud:
         f_info = self._post(self.doupload_url, post_data)
         if not f_info:
             return ShareInfo(LanZouCloud.NETWORK_ERROR)
-        else:
-            f_info = f_info.json()["info"]
+        f_info = f_info.json()["info"]
 
         # id 有效性校验
-        if ("f_id" in f_info.keys() and f_info["f_id"] == "i") or (
-            "name" in f_info.keys() and not f_info["name"]
+        if ("f_id" in f_info and f_info["f_id"] == "i") or (
+            "name" in f_info and not f_info["name"]
         ):
             return ShareInfo(LanZouCloud.ID_ERROR)
 
         # onof=1 时，存在有效的提取码; onof=0 时不存在提取码，但是 pwd 字段还是有一个无效的随机密码
         self._get_response_host(f_info)
         pwd = f_info["pwd"] if int(f_info["onof"]) == 1 else ""
-        if "f_id" in f_info.keys():  # 说明返回的是文件的信息
+        if "f_id" in f_info:  # 说明返回的是文件的信息
             url = f_info["is_newd"] + "/" + f_info["f_id"]  # 文件的分享链接需要拼凑
             file_info = self._post(
                 self.doupload_url, {"task": 12, "file_id": fid}
@@ -1000,15 +991,14 @@ class LanZouCloud:
             result = self._post(self.doupload_url, post_data)
             if not result:
                 return LanZouCloud.NETWORK_ERROR
-            elif result.json()["zt"] != 1:
+            if result.json()["zt"] != 1:
                 return LanZouCloud.FAILED
             return LanZouCloud.SUCCESS
-        else:
-            # 文件夹描述可以置空
-            info = self.get_share_info(fid, is_file=False)
-            if info.code != LanZouCloud.SUCCESS:
-                return info.code
-            return self._set_dir_info(fid, info.name, desc)
+        # 文件夹描述可以置空
+        info = self.get_share_info(fid, is_file=False)
+        if info.code != LanZouCloud.SUCCESS:
+            return info.code
+        return self._set_dir_info(fid, info.name, desc)
 
     def rename_file(self, file_id, filename):
         """允许会员重命名文件(无法修后缀名)"""
@@ -1108,61 +1098,57 @@ class LanZouCloud:
         filename = name_format(os.path.basename(file_path))
         if not is_name_valid(filename):
             filename = filename + ".enc"
-        file = open(file_path, "rb")
-        post_data = {
-            "task": "1",
-            "vie": "2",
-            "ve": "2",
-            "folder_id_bb_n": str(folder_id),
-            "id": "WU_FILE_0",
-            "name": filename,
-            "upload_file": (filename, file, "application/octet-stream"),
-        }
+        with open(file_path, "rb") as file:
+            post_data = {
+                "task": "1",
+                "vie": "2",
+                "ve": "2",
+                "folder_id_bb_n": str(folder_id),
+                "id": "WU_FILE_0",
+                "name": filename,
+                "upload_file": (filename, file, "application/octet-stream"),
+            }
 
-        post_data = MultipartEncoder(post_data)
-        tmp_header = self._headers.copy()
-        tmp_header["Content-Type"] = post_data.content_type
+            post_data = MultipartEncoder(post_data)
+            tmp_header = self._headers.copy()
+            tmp_header["Content-Type"] = post_data.content_type
 
-        # MultipartEncoderMonitor 每上传 8129 bytes数据调用一次回调函数，问题根源是 httplib 库
-        # issue : https://github.com/requests/toolbelt/issues/75
-        # 上传完成后，回调函数会被错误的多调用一次(强迫症受不了)。因此，下面重新封装了回调函数，修改了接受的参数，并阻断了多余的一次调用
-        self._upload_finished_flag = False  # 上传完成的标志
-        start_size = task.now_size
-        logger.debug(f"upload small file: start_size={start_size}")
+            # MultipartEncoderMonitor 每上传 8129 bytes数据调用一次回调函数，问题根源是 httplib 库
+            # issue : https://github.com/requests/toolbelt/issues/75
+            # 上传完成后，回调函数会被错误的多调用一次(强迫症受不了)。因此，下面重新封装了回调函数，修改了接受的参数，并阻断了多余的一次调用
+            self._upload_finished_flag = False  # 上传完成的标志
+            start_size = task.now_size
+            logger.debug(f"upload small file: start_size={start_size}")
 
-        def _call_back(read_monitor):
-            if callback is not None:
-                if not self._upload_finished_flag:
-                    task.now_size = start_size + read_monitor.bytes_read
-                    callback()
-                if read_monitor.len == read_monitor.bytes_read:
-                    self._upload_finished_flag = True
+            def _call_back(read_monitor):
+                if callback is not None:
+                    if not self._upload_finished_flag:
+                        task.now_size = start_size + read_monitor.bytes_read
+                        callback()
+                    if read_monitor.len == read_monitor.bytes_read:
+                        self._upload_finished_flag = True
 
-        monitor = MultipartEncoderMonitor(post_data, _call_back)
-        result = self._post(
-            "https://pc.woozooo.com/html5up.php",
-            monitor,
-            headers=tmp_header,
-            timeout=None,
-        )
-        if not result:  # 网络异常
-            logger.debug("Upload file no result")
-            file.close()
-            return LanZouCloud.NETWORK_ERROR, 0, True
-        else:
+            monitor = MultipartEncoderMonitor(post_data, _call_back)
+            result = self._post(
+                "https://pc.woozooo.com/html5up.php",
+                monitor,
+                headers=tmp_header,
+                timeout=None,
+            )
+            if not result:  # 网络异常
+                logger.debug("Upload file no result")
+                return LanZouCloud.NETWORK_ERROR, 0, True
             if result.status_code == 413:
                 logger.error(f"Upload file too Large: {result.text}")
                 return LanZouCloud.FAILED, 0, True  # 文件超过限制, 上传失败
             result = result.json()
-        if result["zt"] != 1:
-            logger.debug(f"Upload failed: result={result}")
-            file.close()
-            return LanZouCloud.FAILED, 0, True  # 上传失败
+            if result["zt"] != 1:
+                logger.debug(f"Upload failed: result={result}")
+                return LanZouCloud.FAILED, 0, True  # 上传失败
 
-        file_id = result["text"][0]["id"]
-        self.set_passwd(file_id)  # 文件上传后默认关闭提取码
-        file.close()
-        return LanZouCloud.SUCCESS, int(file_id), True
+            file_id = result["text"][0]["id"]
+            self.set_passwd(file_id)  # 文件上传后默认关闭提取码
+            return LanZouCloud.SUCCESS, int(file_id), True
 
     def _upload_big_file(self, task: object, file_path, dir_id, callback=None):
         """上传大文件, 且使得回调函数只显示一个文件"""
@@ -1268,9 +1254,9 @@ class LanZouCloud:
         file_size = os.path.getsize(file_path)
         if file_size == 0:  # 空文件无法上传
             return LanZouCloud.FAILED, 0, False
-        elif file_size <= self._max_size * 1048576:  # 单个文件不超过 max_size 直接上传
+        if file_size <= self._max_size * 1048576:  # 单个文件不超过 max_size 直接上传
             return self._upload_small_file(task, file_path, folder_id, callback)
-        elif not allow_big_file:
+        if not allow_big_file:
             logger.debug(
                 f"Forbid upload big file！file_path={file_path}, max_size={self._max_size}"
             )
@@ -1396,7 +1382,7 @@ class LanZouCloud:
                 return LanZouCloud.SUCCESS
 
         chunk_size = 1024 * 64  # 4096
-        headers = {**self._headers, "Range": "bytes=%d-" % now_size}
+        headers = {**self._headers, "Range": f"bytes={now_size}-"}
         resp = self._get(info.durl, stream=True, headers=headers, timeout=None)
 
         if resp is None:  # 网络异常
@@ -1535,11 +1521,11 @@ class LanZouCloud:
                 # 服务器请求1s限制
                 time.sleep(1)
                 continue
-            elif resp["zt"] == 2:  # 已经拿到全部的文件信息
+            if resp["zt"] == 2:  # 已经拿到全部的文件信息
                 break
-            elif resp["zt"] == 3:  # 提取码错误
+            if resp["zt"] == 3:  # 提取码错误
                 return FolderDetail(LanZouCloud.PASSWORD_ERROR)
-            elif resp["zt"] == 4:  # '请刷新，重试
+            if resp["zt"] == 4:  # '请刷新，重试
                 # 服务端要求刷新重试；必须有重试上限，否则同一页会无限循环
                 retry += 1
                 if retry > _MAX_REFRESH_RETRY:
@@ -1550,8 +1536,7 @@ class LanZouCloud:
                 # 避免频繁请求
                 time.sleep(0.1)
                 continue
-            else:
-                return FolderDetail(LanZouCloud.FAILED)  # 其它未知错误
+            return FolderDetail(LanZouCloud.FAILED)  # 其它未知错误
         # 通过文件的时间信息补全文件夹的年份(如果有文件的话)
         if files:  # 最后一个文件上传时间最早，文件夹的创建年份与其相同
             if folder_time:
@@ -1674,7 +1659,7 @@ class LanZouCloud:
                 down_start_byte = (
                     file_size_now - info["last_ending"]
                 )  # 当前数据块上次下载中断的位置
-                headers = {**self._headers, "Range": "bytes=%d-" % down_start_byte}
+                headers = {**self._headers, "Range": f"bytes={down_start_byte}-"}
                 logger.debug(f"Download {file.name}, Range: {down_start_byte}-")
                 resp = self._get(durl_info.durl, stream=True, headers=headers)
 
@@ -1801,22 +1786,20 @@ class LanZouCloud:
                     time=f_time,
                     size=f_size,
                 )
-            else:
-                return ShareInfo(LanZouCloud.PASSWORD_ERROR)
-        else:
-            f_name = parse_file_name(first_page)
-            f_size = parse_file_size(first_page)
-            f_time = parse_time(first_page)
-            f_desc = parse_desc(first_page)
-            return ShareInfo(
-                LanZouCloud.SUCCESS,
-                name=f_name,
-                url=f_url,
-                pwd=pwd,
-                desc=f_desc,
-                time=f_time,
-                size=f_size,
-            )
+            return ShareInfo(LanZouCloud.PASSWORD_ERROR)
+        f_name = parse_file_name(first_page)
+        f_size = parse_file_size(first_page)
+        f_time = parse_time(first_page)
+        f_desc = parse_desc(first_page)
+        return ShareInfo(
+            LanZouCloud.SUCCESS,
+            name=f_name,
+            url=f_url,
+            pwd=pwd,
+            desc=f_desc,
+            time=f_time,
+            size=f_size,
+        )
 
     def get_user_name(self):
         """获取用户名"""

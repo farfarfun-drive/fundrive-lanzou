@@ -166,9 +166,9 @@ def test_get_short_url_propagates_unexpected_exception():
         mock.patch.object(extra, "ECX_CX_TOKEN", None),
         mock.patch.object(extra.requests, "get", side_effect=Boom("bug")),
         mock.patch.object(extra.requests, "post", side_effect=Boom("bug")),
+        pytest.raises(Boom),
     ):
-        with pytest.raises(Boom):
-            extra.get_short_url("https://example.com/x")
+        extra.get_short_url("https://example.com/x")
 
 
 # -------------------------------------------------------------------- 包元信息一致性

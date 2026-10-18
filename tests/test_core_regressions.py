@@ -79,7 +79,7 @@ def _fake_head(status_map: dict[str, int]):
 def test_check_domains_returns_every_alive_domain():
     """所有域名都返回 200 时，必须返回全部候选域名，一个都不能漏。"""
     candidates = list(core.available_domains)
-    status_map = {d: 200 for d in candidates}
+    status_map = dict.fromkeys(candidates, 200)
 
     with mock.patch.object(core.requests, "head", side_effect=_fake_head(status_map)):
         alive = core.check_domains(timeout=0.5)
@@ -108,11 +108,13 @@ def test_check_domains_does_not_skip_candidates_when_some_fail():
 def test_check_domains_raises_domain_error_when_nothing_alive():
     """全部域名不可用时抛 `NoAvailableDomainError`，而不是裸 `Exception`。"""
     candidates = list(core.available_domains)
-    status_map = {d: 503 for d in candidates}
+    status_map = dict.fromkeys(candidates, 503)
 
-    with mock.patch.object(core.requests, "head", side_effect=_fake_head(status_map)):
-        with pytest.raises(NoAvailableDomainError) as exc_info:
-            core.check_domains(timeout=0.5)
+    with (
+        mock.patch.object(core.requests, "head", side_effect=_fake_head(status_map)),
+        pytest.raises(NoAvailableDomainError) as exc_info,
+    ):
+        core.check_domains(timeout=0.5)
 
     assert isinstance(exc_info.value, LanZouError)
     assert str(len(candidates)) in str(exc_info.value)
@@ -155,11 +157,13 @@ def test_refresh_available_domains_updates_module_state():
 def test_refresh_available_domains_keeps_old_list_on_total_failure():
     """全部不可用时抛异常并保留原列表，不能把 available_domains 清空。"""
     candidates = list(core.available_domains)
-    status_map = {d: 503 for d in candidates}
+    status_map = dict.fromkeys(candidates, 503)
 
-    with mock.patch.object(core.requests, "head", side_effect=_fake_head(status_map)):
-        with pytest.raises(NoAvailableDomainError):
-            core.refresh_available_domains(timeout=0.5)
+    with (
+        mock.patch.object(core.requests, "head", side_effect=_fake_head(status_map)),
+        pytest.raises(NoAvailableDomainError),
+    ):
+        core.refresh_available_domains(timeout=0.5)
 
     assert core.available_domains == candidates
 
@@ -310,3 +314,40 @@ def test_delete_returns_failed_when_server_rejects():
 
     with mock.patch.object(drive, "_post", return_value=resp):
         assert drive.delete(123) == core.LanZouCloud.FAILED
+
+
+def test_upload_small_file_closes_fd_on_413(tmp_path):
+    """413（文件超限）返回时也必须关掉文件句柄。
+
+    回归点：这个函数原先手工在每条 return 前写 `file.close()`，而 413 那条路径漏了
+    （其余三条都有）。另外 `result.json()` / `result["zt"]` / `int(file_id)` 任何一处抛异常
+    时同样会漏。现在整段包在 `with open(...)` 里，任何出口都会关。
+    """
+    import builtins
+    import types
+
+    target = tmp_path / "x.bin"
+    target.write_bytes(b"payload")
+
+    opened = []
+    real_open = builtins.open
+
+    def tracking_open(*args, **kwargs):
+        fh = real_open(*args, **kwargs)
+        opened.append(fh)
+        return fh
+
+    response = mock.MagicMock(status_code=413, text="file too large")
+    drive = core.LanZouCloud()
+
+    with (
+        mock.patch("builtins.open", side_effect=tracking_open),
+        mock.patch.object(core.LanZouCloud, "_post", return_value=response),
+    ):
+        code, _, _ = drive._upload_small_file(
+            types.SimpleNamespace(now_size=0), str(target), folder_id=-1
+        )
+
+    assert code == core.LanZouCloud.FAILED
+    assert opened, "测试本身没生效：没有捕获到任何 open() 调用"
+    assert all(fh.closed for fh in opened), "413 路径漏关文件句柄"
