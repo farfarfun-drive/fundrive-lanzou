@@ -1,15 +1,12 @@
 [project]
 name = "fundrive-lanzou"
-version = "2.0.91"
+version = "2.0.96"
 description = "蓝奏云网盘（LanZouCloud）云存储 API 封装"
 readme = "README.md"
 requires-python = ">=3.10"
 license = "MIT"
 license-files = ["LICENSE"]
 dependencies = [ "cryptography>=44.0.0", "farlog>=1.1.7", "lanzou-api>=2.6.8", "requests>=2.28", "requests-toolbelt>=1.0.0",]
-
-[dependency-groups]
-dev = [ "pytest>=8.0.0", "ruff>=0.14.0",]
 
 [[project.authors]]
 name = "牛哥"
@@ -26,9 +23,12 @@ email = "niuliangtao@qq.com"
 name = "farfarfun"
 email = "farfarfun@qq.com"
 [project.urls]
-Organization = "https://github.com/farfarfun-drive"
-Repository = "https://github.com/farfarfun-drive/fundrive-lanzou"
-Releases = "https://github.com/farfarfun-drive/fundrive-lanzou/releases"
+Organization = "https://github.com/farfarfun"
+Repository = "https://github.com/farfarfun/fundrive-lanzou"
+Releases = "https://github.com/farfarfun/fundrive-lanzou/releases"
+
+[dependency-groups]
+dev = [ "pytest>=8.0.0", "ruff>=0.14.0",]
 
 [build-system]
 requires = ["hatchling"]

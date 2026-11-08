@@ -19,8 +19,6 @@ from time import sleep
 import requests
 from farlog import getLogger
 from requests_toolbelt import MultipartEncoder, MultipartEncoderMonitor
-from urllib3 import disable_warnings
-from urllib3.exceptions import InsecureRequestWarning
 
 from .errors import NoAvailableDomainError
 from .models import FileList
@@ -145,14 +143,13 @@ class LanZouCloud:
             "Referer": self._mydisk_url,
             "Accept-Language": "zh-CN,zh;q=0.9",  # 提取直连必需设置这个，否则拿不到数据
         }
-        disable_warnings(InsecureRequestWarning)  # 全局禁用 SSL 警告
 
     def _get(self, url, **kwargs):
         for possible_url in self._all_possible_urls(url):
             try:
                 kwargs.setdefault("timeout", self._timeout)
                 kwargs.setdefault("headers", self._headers)
-                return self._session.get(possible_url, verify=False, **kwargs)
+                return self._session.get(possible_url, **kwargs)
             except requests.Timeout as err:
                 logger.warning("Encountered timeout error while requesting network!")
                 raise TimeoutError from err
@@ -166,7 +163,7 @@ class LanZouCloud:
             try:
                 kwargs.setdefault("timeout", self._timeout)
                 kwargs.setdefault("headers", self._headers)
-                return self._session.head(possible_url, verify=False, **kwargs)
+                return self._session.head(possible_url, **kwargs)
             except requests.Timeout as err:
                 logger.warning("Encountered timeout error while requesting network!")
                 raise TimeoutError from err
@@ -180,7 +177,7 @@ class LanZouCloud:
             try:
                 kwargs.setdefault("timeout", self._timeout)
                 kwargs.setdefault("headers", self._headers)
-                return self._session.post(possible_url, data, verify=False, **kwargs)
+                return self._session.post(possible_url, data, **kwargs)
             except requests.Timeout as err:
                 logger.warning("Encountered timeout error while requesting network!")
                 raise TimeoutError from err
@@ -1596,9 +1593,7 @@ class LanZouCloud:
             # 这里无需知道 txt 文件的 Content-Length, 全部读取即可
             info = un_serialize(resp.content) if resp else None
             if info is not None:  # 确认是大文件
-                name, size, *_, parts = (
-                    info.values()
-                )  # 真实文件名, 文件字节大小, (其它数据),分段数据文件名(有序)
+                name, size, parts = info["name"], info["size"], info["parts"]
                 file_list = [file_list.find_by_name(p) for p in parts]
                 if all(file_list):  # 分段数据完整
                     logger.debug(f"Big file checking: PASS , name={name}, size={size}")

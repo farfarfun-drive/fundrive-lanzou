@@ -9,6 +9,7 @@ import os
 import pickle
 import re
 from datetime import datetime, timedelta
+from io import BytesIO
 from random import choice, choices, sample, shuffle, uniform
 from typing import Any
 
@@ -257,7 +258,7 @@ def is_file_url(share_url: str) -> bool:
         return True
     # VIP 用户的 URL 很随意
     try:
-        html = requests.get(share_url, headers=headers, verify=False).text
+        html = requests.get(share_url, headers=headers, timeout=15).text
     except requests.RequestException as e:
         logger.error(f"请求分享链接失败: reason={type(e).__name__}: {e}")
         return False
@@ -283,6 +284,11 @@ def is_folder_url(share_url: str) -> bool:
     return bool(re.search(r'id="infos"', html))
 
 
+class _DataOnlyUnpickler(pickle.Unpickler):
+    def find_class(self, module: str, name: str):
+        raise pickle.UnpicklingError("pickle classes are not allowed")
+
+
 def un_serialize(data: bytes) -> dict | None:
     """反序列化上传时写入文件尾部的「报尾」文件信息数据。
 
@@ -299,12 +305,22 @@ def un_serialize(data: bytes) -> dict | None:
     if not is_right_format:
         return None
     try:
-        ret = pickle.loads(data)
+        ret = _DataOnlyUnpickler(BytesIO(data)).load()
     except _UNPICKLE_ERRORS as e:
         # pickle 对不完整/被截断的数据会抛出形态很杂的异常，这里按「数据不可信」统一降级
         logger.debug(f"报尾反序列化失败: {type(e).__name__}: {e}")
         return None
-    if not isinstance(ret, dict):
+    if not isinstance(ret, dict) or set(ret) != {"name", "size", "uploaded", "parts"}:
+        return None
+    if (
+        not isinstance(ret["name"], str)
+        or ret["name"] in {"", ".", ".."}
+        or os.path.basename(ret["name"]) != ret["name"]
+        or type(ret["size"]) is not int
+        or ret["size"] < 0
+        or not isinstance(ret["parts"], list)
+        or not all(isinstance(part, str) for part in ret["parts"])
+    ):
         return None
     return ret
 

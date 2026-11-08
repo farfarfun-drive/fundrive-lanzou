@@ -24,6 +24,22 @@ import pytest
 from fundrives.lanzou import core
 from fundrives.lanzou.errors import LanZouError, NoAvailableDomainError
 
+
+def test_requests_keep_certificate_verification_enabled():
+    drive = core.LanZouCloud()
+    response = mock.Mock()
+    with (
+        mock.patch.object(drive._session, "get", return_value=response) as get,
+        mock.patch.object(drive._session, "head", return_value=response) as head,
+        mock.patch.object(drive._session, "post", return_value=response) as post,
+    ):
+        drive._get("https://pan.lanzoub.com/x")
+        drive._head("https://pan.lanzoub.com/x")
+        drive._post("https://pan.lanzoub.com/x", {"key": "value"})
+    for request in (get, head, post):
+        assert request.call_args.kwargs.get("verify", True) is True
+
+
 # ---------------------------------------------------------------- 导入期无副作用
 
 
@@ -38,6 +54,7 @@ def test_importing_core_makes_no_network_call():
         """
         import socket
         import sys
+        import requests
 
         class _Blocked(socket.socket):
             def __init__(self, *args, **kwargs):

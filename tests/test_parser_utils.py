@@ -7,6 +7,9 @@
 
 from __future__ import annotations
 
+import pickle
+from unittest import mock
+
 import pytest
 
 from fundrives.lanzou import why_error
@@ -27,6 +30,7 @@ from fundrives.lanzou.utils import (
     name_format,
     remove_notes,
     time_format,
+    un_serialize,
 )
 
 
@@ -113,6 +117,30 @@ def test_is_file_url_rejects_non_lanzou_domain():
 
 def test_is_folder_url_rejects_non_lanzou_domain():
     assert is_folder_url("https://example.com/foo") is False
+
+
+def test_un_serialize_accepts_legacy_data_only_record():
+    record = {"name": "archive.zip", "size": 12, "uploaded": 12, "parts": ["part.zip"]}
+    assert un_serialize(pickle.dumps(record, protocol=4)) == record
+
+
+def test_un_serialize_rejects_pickle_code_execution():
+    class Malicious:
+        def __reduce__(self):
+            return (eval, ("{'name': 'archive.zip'}",))
+
+    record = {"name": "archive.zip", "size": 12, "uploaded": 12, "parts": [Malicious()]}
+    payload = pickle.dumps(record, protocol=4)
+    with mock.patch(
+        "builtins.eval", side_effect=AssertionError("executed")
+    ) as evaluate:
+        assert un_serialize(payload) is None
+    evaluate.assert_not_called()
+
+
+def test_un_serialize_rejects_path_outside_download_dir():
+    record = {"name": "../outside", "size": 12, "uploaded": 12, "parts": []}
+    assert un_serialize(pickle.dumps(record, protocol=4)) is None
 
 
 def test_why_error_helper_covers_all_known_codes():
