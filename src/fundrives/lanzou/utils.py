@@ -11,7 +11,6 @@ import re
 from datetime import datetime, timedelta
 from io import BytesIO
 from random import choice, choices, sample, shuffle, uniform
-from typing import Any
 
 import requests
 from farlog import getLogger
@@ -117,25 +116,26 @@ def convert_file_size_to_str(total: int) -> str:
 
 def time_format(time_str: str) -> str:
     """输出格式化时间 %Y-%m-%d"""
+    now = datetime.now().astimezone()
     if "秒前" in time_str or "分钟前" in time_str or "小时前" in time_str:
-        return datetime.today().strftime("%Y-%m-%d")
+        return now.strftime("%Y-%m-%d")
     if "昨天" in time_str:
-        return (datetime.today() - timedelta(days=1)).strftime("%Y-%m-%d")
+        return (now - timedelta(days=1)).strftime("%Y-%m-%d")
     if "前天" in time_str:
-        return (datetime.today() - timedelta(days=2)).strftime("%Y-%m-%d")
+        return (now - timedelta(days=2)).strftime("%Y-%m-%d")
     if "天前" in time_str:
-        days = time_str.replace(" 天前", "")
-        return (datetime.today() - timedelta(days=int(days))).strftime("%Y-%m-%d")
+        days = time_str.replace("天前", "").strip()
+        return (now - timedelta(days=int(days))).strftime("%Y-%m-%d")
     return time_str
 
 
 reg_number = re.compile(r"\d+")
 
 
-def time_stamp(time_str: str) -> datetime | timedelta | str | Any:
-    """输出格式化时间 %Y-%m-%d"""
+def time_stamp(time_str: str) -> float:
+    """将蓝奏云时间文本转换为 Unix 秒级时间戳。"""
     numbers = reg_number.findall(time_str)
-    date = datetime.today()
+    date = datetime.now().astimezone()
     if "秒前" in time_str:
         date = date - timedelta(seconds=int(numbers[0]))
     elif "分钟前" in time_str:
@@ -149,7 +149,7 @@ def time_stamp(time_str: str) -> datetime | timedelta | str | Any:
                 minute=int(numbers[1] if len(numbers) == 2 else "0"),
             )
         else:
-            date = (date - timedelta(days=1)).timestamp()
+            date = date - timedelta(days=1)
     elif "前天" in time_str:
         if numbers:
             date = (date - timedelta(days=2)).replace(
@@ -276,7 +276,7 @@ def is_folder_url(share_url: str) -> bool:
         return True
     # VIP 用户的 URL 很随意
     try:
-        html = requests.get(share_url, headers=headers).text
+        html = requests.get(share_url, headers=headers, timeout=15).text
     except requests.RequestException as e:
         logger.error(f"请求分享链接失败: reason={type(e).__name__}: {e}")
         return False

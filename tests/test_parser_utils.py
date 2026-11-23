@@ -30,6 +30,7 @@ from fundrives.lanzou.utils import (
     name_format,
     remove_notes,
     time_format,
+    time_stamp,
     un_serialize,
 )
 
@@ -101,9 +102,31 @@ def test_convert_file_size_to_str_roundtrip():
 
 def test_time_format_recognizes_relative_time():
     assert time_format("刚刚") == "刚刚"
-    from datetime import datetime
+    from datetime import datetime, timedelta
 
-    assert time_format("5 秒前") == datetime.today().strftime("%Y-%m-%d")
+    now = datetime.now().astimezone()
+    assert time_format("5 秒前") == now.strftime("%Y-%m-%d")
+    assert time_format("3 天前") == (now - timedelta(days=3)).strftime("%Y-%m-%d")
+    assert time_format("3天前") == (now - timedelta(days=3)).strftime("%Y-%m-%d")
+
+
+def test_time_stamp_handles_yesterday_without_clock_time():
+    """回归：'昨天'（无具体时分）此前二次调用 .timestamp() 会抛 AttributeError。"""
+    ts = time_stamp("昨天")
+    assert isinstance(ts, float)
+    assert ts > 0
+
+    ts_with_clock = time_stamp("昨天 12:30")
+    assert isinstance(ts_with_clock, float)
+    assert ts_with_clock > 0
+
+
+def test_is_folder_url_vip_probe_sets_timeout():
+    """VIP 分享目录探测请求必须显式传 timeout。"""
+    resp = mock.Mock(text='<div id="infos"></div>')
+    with mock.patch("fundrives.lanzou.utils.requests.get", return_value=resp) as get:
+        assert is_folder_url("https://demo.lanzoub.com/vip-folder") is True
+    assert get.call_args.kwargs.get("timeout") == 15
 
 
 def test_is_name_valid_checks_suffix():

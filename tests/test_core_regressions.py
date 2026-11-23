@@ -284,12 +284,51 @@ def test_get_folder_info_by_url_handles_post_returning_none():
 
     with (
         mock.patch.object(core, "is_file_url", return_value=False),
-        mock.patch.object(core.requests, "get", return_value=first),
+        mock.patch.object(core.requests, "get", return_value=first) as mocked_get,
         mock.patch.object(drive, "_post", return_value=None),
     ):
         detail = drive.get_folder_info_by_url("https://demo.lanzoub.com/b0d8h93hi")
 
     assert detail.code == core.LanZouCloud.NETWORK_ERROR
+    assert mocked_get.call_args.kwargs.get("timeout") == drive._timeout
+
+
+def test_get_folder_info_by_url_handles_acw_sc_v2_network_failure():
+    """acw_sc__v2 解密后重试请求返回 None 时应返回 NETWORK_ERROR 而非 AttributeError。"""
+    drive = core.LanZouCloud()
+    first = mock.Mock(text="<html>acw_sc__v2</html>")
+    with (
+        mock.patch.object(core, "is_file_url", return_value=False),
+        mock.patch.object(core.requests, "get", return_value=first),
+        mock.patch.object(core, "calc_acw_sc__v2", return_value="cookie-val"),
+        mock.patch.object(drive, "_get", return_value=None),
+    ):
+        detail = drive.get_folder_info_by_url("https://demo.lanzoub.com/b0d8h93hi")
+
+    assert detail.code == core.LanZouCloud.NETWORK_ERROR
+
+
+def test_all_direct_requests_calls_specify_timeout():
+    """静态守卫：src/fundrives/lanzou 下所有直接调用 requests.<verb> 必须显式指定 timeout。"""
+    import ast
+    import pathlib
+
+    src_dir = pathlib.Path(core.__file__).resolve().parent
+    verbs = {"get", "post", "put", "delete", "patch", "head", "options", "request"}
+    missing: list[str] = []
+    for path in sorted(src_dir.rglob("*.py")):
+        tree = ast.parse(path.read_text(encoding="utf-8"), str(path))
+        for node in ast.walk(tree):
+            if (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Attribute)
+                and isinstance(node.func.value, ast.Name)
+                and node.func.value.id == "requests"
+                and node.func.attr in verbs
+                and not any(kw.arg == "timeout" for kw in node.keywords)
+            ):
+                missing.append(f"{path.name}:{node.lineno}")
+    assert missing == [], f"以下 requests 调用缺少 timeout 参数: {missing}"
 
 
 # ----------------------------------------------------------- delete 的正常/异常路径

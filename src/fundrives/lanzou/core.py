@@ -1406,7 +1406,9 @@ class LanZouCloud:
         if is_file_url(share_url):
             return FolderDetail(LanZouCloud.URL_INVALID)
         try:
-            html = requests.get(share_url, headers=self._headers).text
+            html = requests.get(
+                share_url, headers=self._headers, timeout=self._timeout
+            ).text
         except requests.RequestException as e:
             logger.error(f"requests error: {e}")
             return FolderDetail(LanZouCloud.NETWORK_ERROR)
@@ -1423,7 +1425,10 @@ class LanZouCloud:
             acw_sc__v2 = calc_acw_sc__v2(html)
             self._session.cookies.set("acw_sc__v2", acw_sc__v2)
             logger.debug("Set Cookie: acw_sc__v2=***")
-            html = self._get(share_url).text  # 文件分享页面(第一页)
+            resp = self._get(share_url)
+            if resp is None:
+                return FolderDetail(LanZouCloud.NETWORK_ERROR)
+            html = resp.text  # 文件分享页面(第一页)
 
         try:
             # 获取文件需要的参数
@@ -1543,7 +1548,7 @@ class LanZouCloud:
             size_int = sum_files_size(files)
             count = len(files)
         else:  # 可恶，没有文件，日期就设置为今年吧
-            folder_time = datetime.today().strftime("%Y-%m-%d")
+            folder_time = datetime.now().astimezone().strftime("%Y-%m-%d")
             size_int = count = 0
         for sub_folder in sub_folders:  # 将子文件夹文件大小数量信息透传到父文件夹
             size_int += sub_folder.folder.size_int
