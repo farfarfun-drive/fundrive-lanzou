@@ -416,7 +416,15 @@ def let_me_upload(file_path):
         "rpm",
         "flac",
     ]
-    small_file_suffix = big_file_suffix + ["doc", "epub", "mobi", "mp3", "ppt", "pptx"]
+    small_file_suffix = [
+        *big_file_suffix,
+        "doc",
+        "epub",
+        "mobi",
+        "mp3",
+        "ppt",
+        "pptx",
+    ]
     big_file_suffix = choice(big_file_suffix)
     small_file_suffix = choice(small_file_suffix)
     suffix = small_file_suffix if file_size < 30 else big_file_suffix
